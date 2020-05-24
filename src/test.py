@@ -55,5 +55,5 @@ def test_capsule():
     print(sim.object_pair)
 
 if __name__ == '__main__':
-    test_capsule()
-    #test1()
+    #test_capsule()
+    test1()

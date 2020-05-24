@@ -42,7 +42,8 @@ namespace simplex{
     }
 
     int Simplex::get_batch_size(){
-        if(shapes.size()==0) return 0;
+        if(shapes.size()==0)
+            return 0;
         int n = shapes.size();
         int batch_size = shapes[0]->get_batch_size();
         for(int i=0;i<n;++i){
@@ -64,45 +65,39 @@ namespace simplex{
         collisionRequest.num_max_contacts = 4;
         collisionRequest.gjk_solver_type = fcl::GST_LIBCCD;
 
-        if(n!=0){
-            auto batch_size = get_batch_size();
-            for(int batch_id=0; batch_id<batch_size; ++batch_id){
-                vector<CollisionObject*> objects;
-                for(int i=0;i<n;++i){
-                    objects.push_back(shapes[i]->get_collision_object(batch_id));
-                }
-                for(int i=0;i<n;++i){
-                    for(int j=i+1;j<n;++j){
-                        if(!(shapes[i]->contype & shapes[j]->contype))
-                            continue;
-                        fcl::CollisionResult<double> collisionResult;
-                        fcl::collide(objects[i], objects[j], collisionRequest, collisionResult);
+        fcl::CollisionResult<double> collisionResult;
+        if(n==0)
+            return;
 
-                        cout<<"num contacts "<<collisionResult.isCollision()<<endl;
+        auto batch_size = get_batch_size();
+        for(int batch_id=0; batch_id<batch_size; ++batch_id){
+            vector<CollisionObject*> objects;
+            for(int i=0;i<n;++i){
+                objects.push_back(shapes[i]->get_collision_object(batch_id));
+            }
+            for(int i=0;i<n;++i){
+                for(int j=i+1;j<n;++j){
+                    if(!(shapes[i]->contype & shapes[j]->contype))
+                        continue;
+                    collisionResult.clear();
+                    fcl::collide(objects[i], objects[j], collisionRequest, collisionResult);
 
-                        if(collisionResult.isCollision()){
-                            std::vector<fcl::Contact<double>> contacts;
-                            collisionResult.getContacts(contacts);
+                    if(collisionResult.isCollision()){
+                        std::vector<fcl::Contact<double>> contacts;
+                        collisionResult.getContacts(contacts);
 
-                            for(auto contact=contacts.begin();contact!=contacts.end();++contact){
-                                /*
-                                cout<<"normal"<<endl;
-                                cout<<contact->normal[0]<<" ";
-                                cout<<contact->normal[1]<<" ";
-                                cout<<contact->normal[2]<<endl;
-                                */
-                                //XXX: this step seems to be very slow ... 
-                                batch.push_back(batch_id);
-                                for(size_t k=0;k<3;++k){
-                                    np.push_back(contact->normal[k]);
-                                }
-                                for(size_t k=0;k<3;++k){
-                                    np.push_back(contact->pos[k]);
-                                }
-                                dist.push_back(contact->penetration_depth);
-                                collide_idx.push_back(i);
-                                collide_idx.push_back(j);
+                        for(auto contact=contacts.begin();contact!=contacts.end();++contact){
+                            //XXX: this step seems to be very slow ... 
+                            batch.push_back(batch_id);
+                            for(size_t k=0;k<3;++k){
+                                np.push_back(contact->normal[k]);
                             }
+                            for(size_t k=0;k<3;++k){
+                                np.push_back(contact->pos[k]);
+                            }
+                            dist.push_back(contact->penetration_depth);
+                            collide_idx.push_back(i);
+                            collide_idx.push_back(j);
                         }
                     }
                 }
