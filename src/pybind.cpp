@@ -24,20 +24,36 @@ PYBIND11_MODULE(fcl, m) {
     auto PySimplex = py::class_<Simplex>(m, "Simplex");
     PySimplex.def(py::init<double>(), py::arg("contact_threshold")=0)
         .def(
-            "add_box",
+            "box",
             [](Simplex &simplex, const py::array_t<double> &arr) {
                 if (arr.ndim() != 1 || arr.shape(0) != 3){
                     throw std::runtime_error("box size can only be (3,)");
                 }
-                return simplex.add_box(*arr.data(0), *arr.data(1), *arr.data(2));
+                return simplex.box(*arr.data(0), *arr.data(1), *arr.data(2));
             },
             py::arg("size") = make_array<double>({0, 0, 0}), py::return_value_policy::reference)
         .def(
+            "sphere", &Simplex::sphere,
+            py::arg("R") = 1.0, py::return_value_policy::reference)
+        .def(
+            "capsule", &Simplex::capsule,
+            py::arg("R") = 0.1, py::arg("l_x")=1., py::return_value_policy::reference)
+        .def(
             "collide", &Simplex::collide
+        )
+        .def(
+            "add_shape", &Simplex::add_shape, py::return_value_policy::reference
+        )
+        .def(
+            "clear_shapes", &Simplex::clear_shapes
         )
         .def_property_readonly(
           "batch", [](Simplex &simplex) {
               return py::array_t<int>(simplex.batch.size(), simplex.batch.data());
+        })
+        .def_property_readonly(
+          "n", [](Simplex &simplex) {
+              return simplex.size();
         })
         .def_property_readonly(
           "dist", [](Simplex &simplex) {
@@ -55,7 +71,7 @@ PYBIND11_MODULE(fcl, m) {
           "batch_size", &Simplex::get_batch_size
         );
 
-    auto PyShape = py::class_<Shape>(m, "Shape");
+    auto PyShape = py::class_<Shape, std::shared_ptr<Shape>>(m, "Shape");
     PyShape.def(
                "set_pose",
                [](Shape &shape, const py::array_t<double> &arr) {
@@ -67,5 +83,6 @@ PYBIND11_MODULE(fcl, m) {
         .def("get_pose", [](Shape &shape) {
             return py::array_t<double>({shape.get_batch_size(), 4, 4}, shape.get_pose().data());
         })
-        .def_property_readonly("batch_size", &Shape::get_batch_size);
+        .def_property_readonly("batch_size", &Shape::get_batch_size)
+        .def_readwrite("contype", &Shape::contype);
 }

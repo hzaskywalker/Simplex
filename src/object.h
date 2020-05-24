@@ -17,12 +17,15 @@ namespace simplex{
     class Shape{
         public:
             explicit Shape(const CollisionObject& geom);
+            ~Shape();
             CollisionObject* get_collision_object(size_t index);
             int get_batch_size();
 
             void set_pose(const Transforms3d& transforms);
             const Transforms3d& get_pose();
+            int contype=1;
 
+            Matrix3d* rot=0; //shared rotation no mather how the transformation is
             TransformsPtr transforms;
         private:
             CollisionObject object;

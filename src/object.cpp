@@ -1,7 +1,13 @@
 #include "object.h"
 
 namespace simplex{
-    Shape::Shape(const CollisionObject& object): object(object){}
+    Shape::Shape(const CollisionObject& object):object(object){}
+
+    Shape::~Shape(){
+        if(rot!=0){
+            delete rot;
+        } 
+    }
 
     CollisionObject* Shape::get_collision_object(size_t index){
         Matrix3d m;
@@ -12,6 +18,9 @@ namespace simplex{
             for(size_t j=0;j<3;++j){
                 m(i, j) = (*transforms)[start_index + i * 4 + j];
             }
+        }
+        if(rot!=0){
+            m = m * (*rot);
         }
         object.setRotation(m);
         object.setTranslation(vec);

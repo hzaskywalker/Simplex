@@ -9,12 +9,15 @@ using namespace std;
 using CollisionGeometryPtr_t = std::shared_ptr<fcl::CollisionGeometry<double>>;
 
 namespace simplex{
+    using ShapePtr = std::shared_ptr<Shape>;
+
     class Simplex{
         public:
             explicit Simplex(double contact_threshold);
             ~Simplex();
-            Shape* add_box(double x, double y, double z);
-            Shape* add_sphere(double R);
+            ShapePtr box(double x, double y, double z);
+            ShapePtr sphere(double R=1);
+            ShapePtr capsule(double R, double l_x);
             //Shape* add_capsule(double R);
             //Shape* add_ground(double z=0);
 
@@ -29,10 +32,14 @@ namespace simplex{
             //normal and translation ..
             vector<double> np;
             vector<int> collide_idx;
+            Simplex* add_shape(ShapePtr shape);
+            void clear_shapes();
+            int size();
+
         private:
-            Shape* add_shape(CollisionGeometryPtr_t geom_ptr);
+            ShapePtr make_shape(CollisionGeometryPtr_t geom_ptr);
 
             double contact_threshold;
-            vector<Shape*> shapes;
+            vector<ShapePtr> shapes;
     };
 } 
