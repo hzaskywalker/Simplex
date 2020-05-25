@@ -22,7 +22,7 @@ namespace simplex{
             //Shape* add_capsule(double R);
             //Shape* add_ground(double z=0);
 
-            void collide();
+            void collide(bool computeJacobian=false, double epsilon=1e-3);
 
             int get_batch_size();
 
@@ -37,11 +37,21 @@ namespace simplex{
             Simplex* add_shape(ShapePtr shape);
             void clear_shapes();
             int size();
+            void finite_difference(double epsilon);
+
 
         private:
             ShapePtr make_shape(CollisionGeometryPtr_t geom_ptr);
 
             double contact_threshold;
             vector<ShapePtr> shapes;
+            vector<Eigen::VectorXd> jacobian;
+
+            fcl::CollisionResultd collisionResult;
+            fcl::CollisionRequestd collisionRequest;
+
+            inline Eigen::Matrix2d add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts);
+
+            void compute_jacobian(CollisionObject* a, CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts);
     };
 } 

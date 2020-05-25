@@ -1,6 +1,7 @@
 #include "simplex.h"
 
 namespace simplex{
+
     Simplex::Simplex(double contact_threshold): contact_threshold(contact_threshold){
     }
 
@@ -64,20 +65,112 @@ namespace simplex{
         return batch_size;
     }
 
-    void Simplex::collide(){
+    fcl::CollisionRequest<double> get_collision_request(){
+        fcl::CollisionRequest<double> collisionRequest(1, true);
+        collisionRequest.num_max_contacts = 4;
+        collisionRequest.gjk_solver_type = fcl::GST_LIBCCD;
+        return collisionRequest;
+    }
+
+    #define DIM 7
+
+    inline Eigen::Matrix2d Simplex::add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
+
+        // double length = 0.01
+        collisionResult.clear();
+        std::vector<fcl::Contact<double>> new_contacts;
+        fcl::collide(a, b, collisionRequest, collisionResult);
+        collisionResult.getContacts(new_contacts);
+
+        auto s = a->getTranslation();
+        Eigen::Matrix2d jac(contacts.size(), DIM);
+
+        h = h * 10;
+
+        for(size_t i=0;i<contacts.size();++i){
+            auto& old_pos = contacts[i].pos;
+            double nearest = 1e9;
+            int new_id = 0;
+            for(size_t j=0;j<new_contacts.size();++j){
+                auto dist = (new_contacts[j].pos - old_pos).norm();
+                if(dist < nearest){
+                    nearest = dist;
+                    new_id = j;
+                }
+            }
+            if(nearest < h * (s-old_pos).norm()){
+                // get the contacts ...
+                jac(i, 0) = new_contacts[new_id].penetration_depth - contacts[i].penetration_depth;
+                jac.row(i).segment(1,3) = new_contacts[new_id].normal - contacts[i].normal;
+                jac.row(i).tail(3) = new_contacts[new_id].pos - contacts[i].pos;
+            }
+        }
+        return jac;
+    }
+
+    void Simplex::compute_jacobian(CollisionObject* a, CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
+        // 2 x 6 x 2 x (1+3+3)
+        // time complexity: 24 collision detection ...  
+        // we should be able to optimize it 12 as we only care about the contact point??
+        auto cc = collisionRequest.enable_cached_gjk_guess; //enable cache...
+        collisionRequest.enable_cached_gjk_guess = true;
+        collisionRequest.cached_gjk_guess = contacts[0].pos;
+
+        auto rota = a->getRotation(), rotb = b->getRotation();
+        auto veca = a->getTranslation(), vecb = b->getTranslation();
+
+        Eigen::Matrix2d jac(contacts.size(), DIM * 24);
+
+        auto n_c = contacts.size();
+
+        int col = 0;
+        for(int sign=0;sign<2;++sign){
+            double si = sin(h * sign), ci = cos(h * sign);
+            for (int i=0, j=1, k=2; i < 3; ++i, j=(j+1)%3, k=(k+1)%3){
+                Matrix3d rot;
+                rot(i,i)=ci; rot(i,j)=-si; rot(j,i)=si; rot(j,j)=ci; rot(k,k)=1;
+                Vector3d vec; vec(i)=sign;
+
+                a->setRotation(rota*rot);
+                jac.block(0, col, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                a->setRotation(rota);
+
+                a->setTranslation(veca+vec);
+                jac.block(0, col+DIM, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                a->setTranslation(veca);
+
+                b->setRotation(rotb*rot);
+                jac.block(0, col+DIM*2, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                b->setRotation(rotb);
+
+                b->setTranslation(vecb+vec);
+                jac.block(0, col+DIM*3, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                b->setTranslation(vecb);
+
+                col += 4*DIM;
+            }
+        }
+        for(size_t i=0;i<n_c;++i){
+            jacobian.push_back(jac.row(i));
+        }
+
+        collisionRequest.enable_cached_gjk_guess = cc;
+    }
+
+    void Simplex::collide(bool computeJacobian, double epsilon){
         np.clear();
         batch.clear();
         dist.clear();
         collide_idx.clear();
         contact_id.clear();
+        if(computeJacobian){
+            jacobian.clear();
+        }
 
         int n = shapes.size();
 
-        fcl::CollisionRequest<double> collisionRequest(1, true);
-        collisionRequest.num_max_contacts = 4;
-        collisionRequest.gjk_solver_type = fcl::GST_LIBCCD;
+        collisionRequest = get_collision_request();
 
-        fcl::CollisionResult<double> collisionResult;
         if(n==0)
             return;
 
@@ -114,6 +207,9 @@ namespace simplex{
                             contact_id.push_back(num_contact);
 
                             num_contact += 1;
+                        }
+                        if(computeJacobian){
+                            compute_jacobian(objects[i], objects[j], epsilon, contacts);
                         }
                     }
                 }

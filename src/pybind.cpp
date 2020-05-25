@@ -42,7 +42,7 @@ PYBIND11_MODULE(simplex_c, m) {
             "plane", &Simplex::plane,
             py::arg("a") = 0, py::arg("b")=0, py::arg("c")=0, py::arg("d")=0, py::return_value_policy::reference)
         .def(
-            "collide", &Simplex::collide
+            "collide", &Simplex::collide, py::arg("computeJacobian")=false, py::arg("epsilon")=1e-3
         )
         .def(
             "add_shape", &Simplex::add_shape, py::return_value_policy::reference
