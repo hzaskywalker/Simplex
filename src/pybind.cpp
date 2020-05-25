@@ -17,7 +17,7 @@ template <typename T> py::array_t<T> make_array(std::vector<T> const &values) {
   return py::array_t<T>(values.size(), values.data());
 }
 
-PYBIND11_MODULE(fcl, m) {
+PYBIND11_MODULE(simplex_c, m) {
     //m.doc() = "pybind11 example plugin"; // optional module docstring
     m.def("add", &add, "A function which adds two numbers");
 
@@ -38,6 +38,9 @@ PYBIND11_MODULE(fcl, m) {
         .def(
             "capsule", &Simplex::capsule,
             py::arg("R") = 0.1, py::arg("l_x")=1., py::return_value_policy::reference)
+        .def(
+            "plane", &Simplex::plane,
+            py::arg("a") = 0, py::arg("b")=0, py::arg("c")=0, py::arg("d")=0, py::return_value_policy::reference)
         .def(
             "collide", &Simplex::collide
         )
@@ -62,6 +65,10 @@ PYBIND11_MODULE(fcl, m) {
         .def_property_readonly(
           "normal_pos", [](Simplex& simplex) {
               return py::array_t<double>({int(simplex.batch.size()), 2, 3}, simplex.np.data());
+        })
+        .def_property_readonly(
+          "contact_id", [](Simplex& simplex) {
+              return py::array_t<int>(simplex.batch.size(), simplex.contact_id.data());
         })
         .def_property_readonly(
           "object_pair", [](Simplex& simplex) {

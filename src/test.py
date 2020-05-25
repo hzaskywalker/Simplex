@@ -1,6 +1,6 @@
 import numpy as np
 import tqdm
-from simplex import Simplex
+from simplex_c import Simplex
 
 def test1():
     sim = Simplex()

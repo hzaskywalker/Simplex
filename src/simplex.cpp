@@ -16,6 +16,11 @@ namespace simplex{
         return make_shape(CollisionGeometryPtr_t(new fcl::Sphere<double>(R)));
     }
 
+    ShapePtr Simplex::plane(double a, double b, double c, double d){
+        return make_shape(CollisionGeometryPtr_t(new fcl::Plane<double>(a, b, c, d)));
+    }
+
+
     ShapePtr Simplex::capsule(double R, double l_x){
         auto shape = make_shape(CollisionGeometryPtr_t(new fcl::Capsule<double>(R, l_x)));
         shape->rot = new Matrix3d();
@@ -45,10 +50,16 @@ namespace simplex{
         if(shapes.size()==0)
             return 0;
         int n = shapes.size();
-        int batch_size = shapes[0]->get_batch_size();
+        int batch_size = 1;
         for(int i=0;i<n;++i){
-            if(shapes[i]->get_batch_size()!=batch_size)
-                throw std::runtime_error("Batch size of all objects should be the same");
+            int o_batch_size = shapes[i]->get_batch_size();
+            if(o_batch_size!=1){
+                if(batch_size!=1){
+                    if(batch_size != o_batch_size)
+                        throw std::runtime_error("Batch size of all objects should be the same");
+                } else
+                    batch_size = o_batch_size;
+            }
         }
         return batch_size;
     }
@@ -58,6 +69,7 @@ namespace simplex{
         batch.clear();
         dist.clear();
         collide_idx.clear();
+        contact_id.clear();
 
         int n = shapes.size();
 
@@ -75,6 +87,7 @@ namespace simplex{
             for(int i=0;i<n;++i){
                 objects.push_back(shapes[i]->get_collision_object(batch_id));
             }
+            int num_contact = 0;
             for(int i=0;i<n;++i){
                 for(int j=i+1;j<n;++j){
                     if(!(shapes[i]->contype & shapes[j]->contype))
@@ -98,6 +111,9 @@ namespace simplex{
                             dist.push_back(contact->penetration_depth);
                             collide_idx.push_back(i);
                             collide_idx.push_back(j);
+                            contact_id.push_back(num_contact);
+
+                            num_contact += 1;
                         }
                     }
                 }

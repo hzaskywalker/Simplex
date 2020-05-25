@@ -1,7 +1,9 @@
 #include "object.h"
 
 namespace simplex{
-    Shape::Shape(const CollisionObject& object):object(object){}
+    Shape::Shape(const CollisionObject& object_):object(object_){
+        object.setIdentityTransform();
+    }
 
     Shape::~Shape(){
         if(rot!=0){
@@ -10,26 +12,31 @@ namespace simplex{
     }
 
     CollisionObject* Shape::get_collision_object(size_t index){
-        Matrix3d m;
-        Vector3d vec;
-        size_t start_index = index * 16;
-        for(size_t i=0;i<3;++i){
-            vec(i) = (*transforms)[start_index + i * 4 + 3];
-            for(size_t j=0;j<3;++j){
-                m(i, j) = (*transforms)[start_index + i * 4 + j];
+        if(transforms.get()!=0){
+            // if we have set the pose
+            Matrix3d m;
+            Vector3d vec;
+            size_t start_index = index * 16;
+            if(transforms->size()==16)
+                start_index = 0;
+            for(size_t i=0;i<3;++i){
+                vec(i) = (*transforms)[start_index + i * 4 + 3];
+                for(size_t j=0;j<3;++j){
+                    m(i, j) = (*transforms)[start_index + i * 4 + j];
+                }
             }
+            if(rot!=0){
+                m = m * (*rot);
+            }
+            object.setRotation(m);
+            object.setTranslation(vec);
         }
-        if(rot!=0){
-            m = m * (*rot);
-        }
-        object.setRotation(m);
-        object.setTranslation(vec);
         return &object;
     }
 
     int Shape::get_batch_size(){
         if(transforms.get()==0)
-            return 0;
+            return 1;
         return transforms->size()/16;
     }
 

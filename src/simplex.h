@@ -17,6 +17,7 @@ namespace simplex{
             ~Simplex();
             ShapePtr box(double x, double y, double z);
             ShapePtr sphere(double R=1);
+            ShapePtr plane(double a, double b, double c, double d);
             ShapePtr capsule(double R, double l_x);
             //Shape* add_capsule(double R);
             //Shape* add_ground(double z=0);
@@ -27,6 +28,7 @@ namespace simplex{
 
             // collision result
             vector<int> batch;
+            vector<int> contact_id;
             vector<double> dist;
 
             //normal and translation ..
