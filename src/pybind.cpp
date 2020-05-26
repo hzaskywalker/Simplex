@@ -75,7 +75,22 @@ PYBIND11_MODULE(simplex_c, m) {
               return py::array_t<int>({int(simplex.batch.size()), 2}, simplex.collide_idx.data());
         })
         .def_property_readonly(
+          "jacobian", [](Simplex& simplex){
+              //only for testing ...
+              int dim = 24 * 7;
+              int nc = simplex.batch.size();
+              Eigen::MatrixXd ans(nc, dim);
+              for(int i=0;i<nc;++i){
+                  ans.row(i) = simplex.jacobian[i];
+              }
+              return ans;
+          }
+        )
+        .def_property_readonly(
           "batch_size", &Simplex::get_batch_size
+        )
+        .def(
+            "backward", &Simplex::backward
         );
 
     auto PyShape = py::class_<Shape, std::shared_ptr<Shape>>(m, "Shape");
@@ -91,5 +106,7 @@ PYBIND11_MODULE(simplex_c, m) {
             return py::array_t<double>({shape.get_batch_size(), 4, 4}, shape.get_pose().data());
         })
         .def_property_readonly("batch_size", &Shape::get_batch_size)
-        .def_readwrite("contype", &Shape::contype);
+        .def_property_readonly("grad", [](Shape &shape){return shape.grads;})
+        .def_readwrite("contype", &Shape::contype)
+        .def("zero_grad", &Shape::zero_grad);
 }

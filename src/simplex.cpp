@@ -21,7 +21,6 @@ namespace simplex{
         return make_shape(CollisionGeometryPtr_t(new fcl::Plane<double>(a, b, c, d)));
     }
 
-
     ShapePtr Simplex::capsule(double R, double l_x){
         auto shape = make_shape(CollisionGeometryPtr_t(new fcl::Capsule<double>(R, l_x)));
         shape->rot = new Matrix3d();
@@ -81,9 +80,9 @@ namespace simplex{
         collisionResult.getContacts(new_contacts);
 
         auto s = a->getTranslation();
-        Eigen::MatrixXd jac(contacts.size(), DIM);
+        Eigen::MatrixXd jac = Eigen::MatrixXd::Zero(contacts.size(), DIM);
 
-        h = h * 10;
+        double tolerance = abs(h * 10);
 
         for(size_t i=0;i<contacts.size();++i){
             auto& old_pos = contacts[i].pos;
@@ -96,20 +95,20 @@ namespace simplex{
                     new_id = j;
                 }
             }
-            if(nearest < h * (s-old_pos).norm()){
+            if(nearest < tolerance * (s-old_pos).norm()){
                 // get the contacts ...
                 jac(i, 0) = new_contacts[new_id].penetration_depth - contacts[i].penetration_depth;
                 jac.row(i).segment(1,3) = new_contacts[new_id].normal - contacts[i].normal;
                 jac.row(i).tail(3) = new_contacts[new_id].pos - contacts[i].pos;
             }
         }
-        return jac;
+        return jac/h;
     }
 
+    #define START(i, j, k) (((i)*VDIM*2 + (k)*VDIM + (j))*DIM)
+
     void Simplex::compute_jacobian(CollisionObject* a, CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
-        // sign (2) x (rxa, vxa, rxb, vxb, rya, vya, ryb, vyb, rza, vza, rzb, vzb) x 2 x (1+3+3)
-        // time complexity: 24 collision detection ...  
-        // we should be able to optimize it 12 as we only care about the contact point??
+        // sign obj(2) x sign(2) x 6 x (1+3+3)
         auto cc = collisionRequest.enable_cached_gjk_guess; //enable cache...
         collisionRequest.enable_cached_gjk_guess = true;
         collisionRequest.cached_gjk_guess = contacts[0].pos;
@@ -117,35 +116,39 @@ namespace simplex{
         auto rota = a->getRotation(), rotb = b->getRotation();
         auto veca = a->getTranslation(), vecb = b->getTranslation();
 
-        Eigen::MatrixXd jac(contacts.size(), DIM * 24);
+        Eigen::MatrixXd jac = Eigen::MatrixXd::Zero(contacts.size(), DIM * 24);
+
+        #define __ROW__(i,j,k) jac.block(0, START(i,j,k), n_c, DIM)
+
 
         auto n_c = contacts.size();
 
-        int col = 0;
         for(int sign=0;sign<2;++sign){
-            double si = sin(h * sign), ci = cos(h * sign);
+            double s = sign * 2 - 1;
+            double dx = s * h;
+            double ci = cos(dx), si = sin(dx);
             for (int i=0, j=1, k=2; i < 3; ++i, j=(j+1)%3, k=(k+1)%3){
-                Matrix3d rot;
-                rot(i,i)=ci; rot(i,j)=-si; rot(j,i)=si; rot(j,j)=ci; rot(k,k)=1;
-                Vector3d vec; vec(i)=sign;
+                Matrix3d rot = Matrix3d::Zero();
+                rot(j,j)=ci; rot(j,k)=-si; rot(k,j)=si; rot(k,k)=ci; rot(i,i)=1;
+                Vector3d vec = Vector3d::Zero();
+                vec(i)=dx;
+                // the i-th ball, j-th
 
                 a->setRotation(rota*rot);
-                jac.block(0, col, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                __ROW__(0, i, sign) = add_jacobian_column(a, b, dx, contacts);
                 a->setRotation(rota);
 
                 a->setTranslation(veca+vec);
-                jac.block(0, col+DIM, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                __ROW__(0, i+3, sign) = add_jacobian_column(a, b, dx, contacts);
                 a->setTranslation(veca);
 
                 b->setRotation(rotb*rot);
-                jac.block(0, col+DIM*2, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                __ROW__(1, i, sign) = add_jacobian_column(a, b, dx, contacts);
                 b->setRotation(rotb);
 
                 b->setTranslation(vecb+vec);
-                jac.block(0, col+DIM*3, n_c, DIM) = add_jacobian_column(a, b, h, contacts);
+                __ROW__(1, i+3, sign) = add_jacobian_column(a, b, dx, contacts);
                 b->setTranslation(vecb);
-
-                col += 4*DIM;
             }
         }
         for(size_t i=0;i<n_c;++i){
@@ -158,30 +161,22 @@ namespace simplex{
     void Simplex::backward(const Eigen::MatrixXd& dLdy){
         // dLdy is in the form of num_contact x 7
         // clear the grads ...
+        if(jacobian.size()!=batch.size()){
+            throw std::runtime_error("Can't backward the collide function if forward is not called");
+        }
         for(size_t i=0;i<shapes.size();++i){
             shapes[i]->zero_grad();
         }
         int n_c = batch.size();
-        int cc = 12 * DIM;
-        Eigen::VectorXd ans;
+        Eigen::VectorXd ans = Eigen::VectorXd::Zero(VDIM);
         for(int i=0;i<n_c;++i){
             int batch_id = batch[i];
             for(int obj=0;obj<2;++obj){
                 int obj_idx = 2 * i + obj;
-                for(int d=0;i<VDIM;++d){//VDIM=6
-                    int dim = (d%3) * 4 + obj * 2 + d/3;// a very stange low to get it..
-
-                    double var = 0;
-                    for(int sign=0;sign<2;++sign){
-                        int l = dim * DIM + cc * sign;
-                        double var2 = dLdy.row(i).dot(jacobian[i].segment(l, 7));
-                        if(sign == 0 || var < var2){
-                            var2 = var;
-                        }
-                    }
-                    ans(d) = var;
-                }
-                shapes[obj_idx]->backward(batch_id, ans);
+                auto tmp = jacobian[i].segment(START(obj, 0, 0), 2*VDIM*DIM);
+                Eigen::VectorXd tmp2 = (tmp.head(VDIM*DIM) + tmp.tail(VDIM*DIM))/2;
+                Eigen::MatrixXd Jac = Eigen::Map<Eigen::MatrixXd>(tmp2.data(), DIM, VDIM);
+                shapes[obj_idx]->backward(batch_id, dLdy.row(i)*Jac);
             }
         }
     }
@@ -192,9 +187,7 @@ namespace simplex{
         dist.clear();
         collide_idx.clear();
         contact_id.clear();
-        if(computeJacobian){
-            jacobian.clear();
-        }
+        jacobian.clear();
 
         int n = shapes.size();
 

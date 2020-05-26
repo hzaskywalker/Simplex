@@ -49,7 +49,7 @@ namespace simplex{
     }
 
     void Shape::zero_grad(){
-        grads=Eigen::MatrixXd(get_batch_size(), VDIM);
+        grads=Eigen::MatrixXd::Zero(get_batch_size(), VDIM);
     }
 
     void Shape::backward(int batch_id, Eigen::VectorXd grad){

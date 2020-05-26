@@ -38,16 +38,14 @@ namespace simplex{
             Simplex* add_shape(ShapePtr shape);
             void clear_shapes();
             int size();
-            void finite_difference(double epsilon);
-
+            vector<Eigen::VectorXd> jacobian;
+            void backward(const Eigen::MatrixXd& dLdy);
 
         private:
             ShapePtr make_shape(CollisionGeometryPtr_t geom_ptr);
-            void backward(const Eigen::MatrixXd& dLdy);
 
             double contact_threshold;
             vector<ShapePtr> shapes;
-            vector<Eigen::VectorXd> jacobian;
 
             fcl::CollisionResultd collisionResult;
             fcl::CollisionRequestd collisionRequest;

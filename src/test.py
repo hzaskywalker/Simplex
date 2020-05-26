@@ -54,6 +54,39 @@ def test_capsule():
     print(sim.batch)
     print(sim.object_pair)
 
+def test_grad():
+    sim = Simplex()
+    box = sim.box(np.array([1, 1, 1]))
+    box.set_pose(np.eye(4)[None,:])
+
+    """
+    box2 = sim.box(np.array([1, 1, 1]))
+    pose = np.eye(4)[None,:]
+    pose[:, 2, 3] = 1
+    box2.set_pose(pose)
+    """
+
+    sphere = sim.sphere(0.5)
+    sphere.set_pose(np.array([
+        [
+            [1, 0, 0, 0],
+            [0, 1, 0, 0],
+            [0, 0, 1, 0.9],
+            [0, 0, 0, 1],
+        ]
+    ]))
+    sim.add_shape(sphere).add_shape(box)
+    sim.collide(computeJacobian=True)
+    jac = sim.jacobian.reshape(2, 2, 6, 7)
+
+    d = np.zeros((sim.batch.shape[0], 7))
+    d[:, 1:4] = 1
+    sim.backward(d)
+    print('sphere time', sphere.grad)
+    print('box time', box.grad)
+
+
 if __name__ == '__main__':
     #test_capsule()
-    test1()
+    #test1()
+    test_grad()
