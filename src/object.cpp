@@ -47,4 +47,13 @@ namespace simplex{
     void Shape::set_pose(const Transforms3d& _transforms){
         transforms = TransformsPtr(new Transforms3d(_transforms));
     }
+
+    void Shape::zero_grad(){
+        grads=Eigen::MatrixXd(get_batch_size(), VDIM);
+    }
+
+    void Shape::backward(int batch_id, Eigen::VectorXd grad){
+        batch_id = min(get_batch_size()-1, batch_id) * VDIM; // gradients ..
+        grads.row(batch_id) = grad;
+    }
 }

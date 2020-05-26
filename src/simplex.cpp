@@ -72,9 +72,7 @@ namespace simplex{
         return collisionRequest;
     }
 
-    #define DIM 7
-
-    inline Eigen::Matrix2d Simplex::add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
+    inline Eigen::MatrixXd Simplex::add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
 
         // double length = 0.01
         collisionResult.clear();
@@ -83,7 +81,7 @@ namespace simplex{
         collisionResult.getContacts(new_contacts);
 
         auto s = a->getTranslation();
-        Eigen::Matrix2d jac(contacts.size(), DIM);
+        Eigen::MatrixXd jac(contacts.size(), DIM);
 
         h = h * 10;
 
@@ -109,7 +107,7 @@ namespace simplex{
     }
 
     void Simplex::compute_jacobian(CollisionObject* a, CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts){
-        // 2 x 6 x 2 x (1+3+3)
+        // sign (2) x (rxa, vxa, rxb, vxb, rya, vya, ryb, vyb, rza, vza, rzb, vzb) x 2 x (1+3+3)
         // time complexity: 24 collision detection ...  
         // we should be able to optimize it 12 as we only care about the contact point??
         auto cc = collisionRequest.enable_cached_gjk_guess; //enable cache...
@@ -119,7 +117,7 @@ namespace simplex{
         auto rota = a->getRotation(), rotb = b->getRotation();
         auto veca = a->getTranslation(), vecb = b->getTranslation();
 
-        Eigen::Matrix2d jac(contacts.size(), DIM * 24);
+        Eigen::MatrixXd jac(contacts.size(), DIM * 24);
 
         auto n_c = contacts.size();
 
@@ -155,6 +153,37 @@ namespace simplex{
         }
 
         collisionRequest.enable_cached_gjk_guess = cc;
+    }
+
+    void Simplex::backward(const Eigen::MatrixXd& dLdy){
+        // dLdy is in the form of num_contact x 7
+        // clear the grads ...
+        for(size_t i=0;i<shapes.size();++i){
+            shapes[i]->zero_grad();
+        }
+        int n_c = batch.size();
+        int cc = 12 * DIM;
+        Eigen::VectorXd ans;
+        for(int i=0;i<n_c;++i){
+            int batch_id = batch[i];
+            for(int obj=0;obj<2;++obj){
+                int obj_idx = 2 * i + obj;
+                for(int d=0;i<VDIM;++d){//VDIM=6
+                    int dim = (d%3) * 4 + obj * 2 + d/3;// a very stange low to get it..
+
+                    double var = 0;
+                    for(int sign=0;sign<2;++sign){
+                        int l = dim * DIM + cc * sign;
+                        double var2 = dLdy.row(i).dot(jacobian[i].segment(l, 7));
+                        if(sign == 0 || var < var2){
+                            var2 = var;
+                        }
+                    }
+                    ans(d) = var;
+                }
+                shapes[obj_idx]->backward(batch_id, ans);
+            }
+        }
     }
 
     void Simplex::collide(bool computeJacobian, double epsilon){
@@ -194,7 +223,6 @@ namespace simplex{
 
                         for(auto contact=contacts.begin();contact!=contacts.end();++contact){
                             //XXX: this step seems to be very slow ... 
-                            batch.push_back(batch_id);
                             for(size_t k=0;k<3;++k){
                                 np.push_back(contact->normal[k]);
                             }
@@ -202,6 +230,7 @@ namespace simplex{
                                 np.push_back(contact->pos[k]);
                             }
                             dist.push_back(contact->penetration_depth);
+                            batch.push_back(batch_id);
                             collide_idx.push_back(i);
                             collide_idx.push_back(j);
                             contact_id.push_back(num_contact);

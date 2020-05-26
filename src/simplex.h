@@ -4,6 +4,7 @@
 #include "fcl/narrowphase/collision.h"
 #include "fcl/narrowphase/collision_object.h"
 #include "object.h"
+#define DIM 7
 
 using namespace std;
 using CollisionGeometryPtr_t = std::shared_ptr<fcl::CollisionGeometry<double>>;
@@ -42,6 +43,7 @@ namespace simplex{
 
         private:
             ShapePtr make_shape(CollisionGeometryPtr_t geom_ptr);
+            void backward(const Eigen::MatrixXd& dLdy);
 
             double contact_threshold;
             vector<ShapePtr> shapes;
@@ -50,7 +52,7 @@ namespace simplex{
             fcl::CollisionResultd collisionResult;
             fcl::CollisionRequestd collisionRequest;
 
-            inline Eigen::Matrix2d add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts);
+            inline Eigen::MatrixXd add_jacobian_column(const CollisionObject* a, const CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts);
 
             void compute_jacobian(CollisionObject* a, CollisionObject* b, double h, std::vector<fcl::Contact<double>>& contacts);
     };

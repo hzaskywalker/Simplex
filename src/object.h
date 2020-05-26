@@ -1,4 +1,5 @@
 #pragma once
+#define VDIM 6
 #include <Eigen/Dense>
 #include "fcl/math/constants.h"
 #include "fcl/narrowphase/collision.h"
@@ -27,6 +28,10 @@ namespace simplex{
 
             Matrix3d* rot=0; //shared rotation no mather how the transformation is
             TransformsPtr transforms;
+
+            Eigen::MatrixXd grads;
+            void backward(int batch_id, Eigen::VectorXd grad);
+            void zero_grad();
         private:
             CollisionObject object;
     };
