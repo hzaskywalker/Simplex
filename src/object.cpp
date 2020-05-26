@@ -54,6 +54,6 @@ namespace simplex{
 
     void Shape::backward(int batch_id, Eigen::VectorXd grad){
         batch_id = min(get_batch_size()-1, batch_id) * VDIM; // gradients ..
-        grads.row(batch_id) = grad;
+        grads.row(batch_id) += grad;
     }
 }

@@ -138,7 +138,7 @@ namespace simplex{
                 __ROW__(0, i, sign) = add_jacobian_column(a, b, dx, contacts);
                 a->setRotation(rota);
 
-                a->setTranslation(veca+vec);
+                a->setTranslation(veca+rota*vec);
                 __ROW__(0, i+3, sign) = add_jacobian_column(a, b, dx, contacts);
                 a->setTranslation(veca);
 
@@ -146,7 +146,7 @@ namespace simplex{
                 __ROW__(1, i, sign) = add_jacobian_column(a, b, dx, contacts);
                 b->setRotation(rotb);
 
-                b->setTranslation(vecb+vec);
+                b->setTranslation(vecb+rotb*vec);
                 __ROW__(1, i+3, sign) = add_jacobian_column(a, b, dx, contacts);
                 b->setTranslation(vecb);
             }
@@ -172,10 +172,10 @@ namespace simplex{
         for(int i=0;i<n_c;++i){
             int batch_id = batch[i];
             for(int obj=0;obj<2;++obj){
-                int obj_idx = 2 * i + obj;
                 auto tmp = jacobian[i].segment(START(obj, 0, 0), 2*VDIM*DIM);
                 Eigen::VectorXd tmp2 = (tmp.head(VDIM*DIM) + tmp.tail(VDIM*DIM))/2;
                 Eigen::MatrixXd Jac = Eigen::Map<Eigen::MatrixXd>(tmp2.data(), DIM, VDIM);
+                int obj_idx = collide_idx[2 * i + obj];
                 shapes[obj_idx]->backward(batch_id, dLdy.row(i)*Jac);
             }
         }
